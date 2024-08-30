@@ -6,6 +6,15 @@ import pyperclip
 import json
 from gitignore_parser import parse_gitignore
 
+# Define dark mode colors
+DARK_BG = "#2E2E2E"
+DARK_FG = "#FFFFFF"
+DARK_BUTTON = "#4A4A4A"
+DARK_BUTTON_HOVER = "#5A5A5A"
+DARK_ENTRY = "#3E3E3E"
+DARK_HIGHLIGHT = "#505050"
+DARK_SCROLLBAR = "#3E3E3E"
+DARK_SCROLLBAR_ACTIVE = "#505050"
 
 
 class CodePreparationTool:
@@ -14,15 +23,51 @@ class CodePreparationTool:
         self.root.title("Code Preparation Tool for LLM")
         self.root.geometry("1200x800")
 
+        # Set dark theme
+        self.root.configure(bg=DARK_BG)
+        self.style = ttk.Style()
+        self.style.theme_use('default')
+        self.style.configure('TButton', background=DARK_BUTTON, foreground=DARK_FG)
+        self.style.configure('TCheckbutton', background=DARK_BG, foreground=DARK_FG)
+        self.style.configure('TCombobox', fieldbackground=DARK_ENTRY, background=DARK_BG, foreground=DARK_FG)
+        self.style.map('TCombobox', fieldbackground=[('readonly', DARK_ENTRY)])
+        self.style.map('TCombobox', selectbackground=[('readonly', DARK_HIGHLIGHT)])
+        self.style.map('TCombobox', selectforeground=[('readonly', DARK_FG)])
+
         self.file_strategies = {}
         self.function_strategies = {}
-        self.file_frames = {}  # Add this line to initialize file_frames
+        self.file_frames = {}
         self.selected_file = None
         self.project_directory = None
         self.create_widgets()
         self.aggregated_code = ""
         self.load_options()
         self.gitignore_matches = None
+
+    def configure_styles(self):
+        # Button style
+        self.style.configure('TButton', background=DARK_BUTTON, foreground=DARK_FG, borderwidth=1)
+        self.style.map('TButton',
+                       background=[('active', DARK_BUTTON_HOVER)],
+                       relief=[('pressed', 'sunken')])
+
+        # Checkbutton style
+        self.style.configure('TCheckbutton', background=DARK_BG, foreground=DARK_FG)
+
+        # Combobox style
+        self.style.configure('TCombobox', fieldbackground=DARK_ENTRY, background=DARK_BG, foreground=DARK_FG)
+        self.style.map('TCombobox', fieldbackground=[('readonly', DARK_ENTRY)])
+        self.style.map('TCombobox', selectbackground=[('readonly', DARK_HIGHLIGHT)])
+        self.style.map('TCombobox', selectforeground=[('readonly', DARK_FG)])
+
+        # Scrollbar style
+        self.style.configure("Custom.Vertical.TScrollbar", background=DARK_SCROLLBAR, troughcolor=DARK_BG,
+                             bordercolor=DARK_BG, arrowcolor=DARK_FG)
+        self.style.map("Custom.Vertical.TScrollbar", background=[("active", DARK_SCROLLBAR_ACTIVE)])
+
+        # Treeview style (for consistency)
+        self.style.configure("Treeview", background=DARK_ENTRY, foreground=DARK_FG, fieldbackground=DARK_ENTRY)
+        self.style.map('Treeview', background=[('selected', DARK_HIGHLIGHT)])
 
     def parse_gitignore(self):
         gitignore_path = os.path.join(self.project_directory, '.gitignore')
@@ -32,12 +77,12 @@ class CodePreparationTool:
         return None
 
     def create_widgets(self):
-        self.main_frame = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.main_frame = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=DARK_BG)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.left_frame = tk.Frame(self.main_frame, width=500)
-        self.right_frame = tk.Frame(self.main_frame, width=500)
-        self.output_frame = tk.Frame(self.main_frame, width=300)
+        self.left_frame = tk.Frame(self.main_frame, width=500, bg=DARK_BG)
+        self.right_frame = tk.Frame(self.main_frame, width=500, bg=DARK_BG)
+        self.output_frame = tk.Frame(self.main_frame, width=300, bg=DARK_BG)
 
         self.main_frame.paneconfigure(self.left_frame, minsize=500)
         self.main_frame.paneconfigure(self.right_frame, minsize=500)
@@ -47,25 +92,18 @@ class CodePreparationTool:
         self.main_frame.add(self.right_frame)
         self.main_frame.add(self.output_frame)
 
-        # Left Panel (Files)
         self.create_file_panel()
-
-        # Right Panel (Functions)
         self.create_function_panel()
-
-        # Output Panel
         self.create_output_panel()
-
-        # Bottom Panel
         self.create_bottom_panel()
 
     def create_file_panel(self):
-        self.file_frame = tk.Frame(self.left_frame)
+        self.file_frame = tk.Frame(self.left_frame, bg=DARK_BG)
         self.file_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.file_canvas = tk.Canvas(self.file_frame)
-        self.file_scrollbar = tk.Scrollbar(self.file_frame, orient="vertical", command=self.file_canvas.yview)
-        self.scrollable_file_frame = tk.Frame(self.file_canvas, bg="white")  # Set white background
+        self.file_canvas = tk.Canvas(self.file_frame, bg=DARK_BG, highlightthickness=0)
+        self.file_scrollbar = ttk.Scrollbar(self.file_frame, orient="vertical", command=self.file_canvas.yview, style="Custom.Vertical.TScrollbar")
+        self.scrollable_file_frame = tk.Frame(self.file_canvas, bg=DARK_BG)
 
         self.scrollable_file_frame.bind(
             "<Configure>",
@@ -80,19 +118,19 @@ class CodePreparationTool:
         self.file_canvas.pack(side="left", fill="both", expand=True)
         self.file_scrollbar.pack(side="right", fill="y")
 
-        # File panel header
-        header_frame = tk.Frame(self.scrollable_file_frame, bg="white")  # Set white background
+        header_frame = tk.Frame(self.scrollable_file_frame, bg=DARK_BG)
         header_frame.pack(fill=tk.X, padx=5, pady=2)
-        tk.Label(header_frame, text="File", width=40, anchor="w", bg="white").pack(side=tk.LEFT)
-        tk.Label(header_frame, text="Strategy", width=30, bg="white").pack(side=tk.LEFT)
+        tk.Label(header_frame, text="File", width=40, anchor="w", bg=DARK_BG, fg=DARK_FG).pack(side=tk.LEFT)
+        tk.Label(header_frame, text="Strategy", width=30, bg=DARK_BG, fg=DARK_FG).pack(side=tk.LEFT)
 
     def create_function_panel(self):
-        self.function_frame = tk.Frame(self.right_frame)
+        self.function_frame = tk.Frame(self.right_frame, bg=DARK_BG)
         self.function_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.function_canvas = tk.Canvas(self.function_frame)
-        self.function_scrollbar = tk.Scrollbar(self.function_frame, orient="vertical", command=self.function_canvas.yview)
-        self.scrollable_function_frame = tk.Frame(self.function_canvas)
+        self.function_canvas = tk.Canvas(self.function_frame, bg=DARK_BG, highlightthickness=0)
+        self.function_scrollbar = ttk.Scrollbar(self.function_frame, orient="vertical",
+                                                command=self.function_canvas.yview, style="Custom.Vertical.TScrollbar")
+        self.scrollable_function_frame = tk.Frame(self.function_canvas, bg=DARK_BG)
 
         self.scrollable_function_frame.bind(
             "<Configure>",
@@ -107,18 +145,17 @@ class CodePreparationTool:
         self.function_canvas.pack(side="left", fill="both", expand=True)
         self.function_scrollbar.pack(side="right", fill="y")
 
-        # Function panel header
-        header_frame = tk.Frame(self.scrollable_function_frame)
+        header_frame = tk.Frame(self.scrollable_function_frame, bg=DARK_BG)
         header_frame.pack(fill=tk.X, padx=5, pady=2)
-        tk.Label(header_frame, text="Function", width=30, anchor="w").pack(side=tk.LEFT)
-        tk.Label(header_frame, text="Strategy", width=15).pack(side=tk.LEFT)
+        tk.Label(header_frame, text="Function", width=30, anchor="w", bg=DARK_BG, fg=DARK_FG).pack(side=tk.LEFT)
+        tk.Label(header_frame, text="Strategy", width=15, bg=DARK_BG, fg=DARK_FG).pack(side=tk.LEFT)
 
     def create_output_panel(self):
-        output_frame = tk.Frame(self.output_frame)
+        output_frame = tk.Frame(self.output_frame, bg=DARK_BG)
         output_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.output_text = tk.Text(output_frame, wrap=tk.WORD)
-        output_scrollbar = tk.Scrollbar(output_frame, orient="vertical", command=self.output_text.yview)
+        self.output_text = tk.Text(output_frame, wrap=tk.WORD, bg=DARK_ENTRY, fg=DARK_FG, insertbackground=DARK_FG)
+        output_scrollbar = ttk.Scrollbar(output_frame, orient="vertical", command=self.output_text.yview, style="Custom.Vertical.TScrollbar")
 
         self.output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         output_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -126,66 +163,42 @@ class CodePreparationTool:
         self.output_text.configure(yscrollcommand=output_scrollbar.set)
 
     def create_bottom_panel(self):
-        self.button_frame = tk.Frame(self.root)
+        self.button_frame = tk.Frame(self.root, bg=DARK_BG)
         self.button_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
-        self.browse_button = tk.Button(self.button_frame, text="Browse", command=self.browse_directory)
+        self.browse_button = ttk.Button(self.button_frame, text="Browse", command=self.browse_directory)
         self.browse_button.pack(side=tk.LEFT)
 
-        self.refresh_button = tk.Button(self.button_frame, text="Refresh", command=self.refresh_directory)
+        self.refresh_button = ttk.Button(self.button_frame, text="Refresh", command=self.refresh_directory)
         self.refresh_button.pack(side=tk.LEFT)
 
-        self.process_button = tk.Button(self.button_frame, text="Process All", command=self.process_all_files)
+        self.process_button = ttk.Button(self.button_frame, text="Process All", command=self.process_all_files)
         self.process_button.pack(side=tk.LEFT)
 
-        self.save_button = tk.Button(self.button_frame, text="Save to File", command=self.save_to_file)
+        self.save_button = ttk.Button(self.button_frame, text="Save to File", command=self.save_to_file)
         self.save_button.pack(side=tk.LEFT)
 
-        self.copy_button = tk.Button(self.button_frame, text="Copy to Clipboard", command=self.copy_to_clipboard)
+        self.copy_button = ttk.Button(self.button_frame, text="Copy to Clipboard", command=self.copy_to_clipboard)
         self.copy_button.pack(side=tk.LEFT)
 
         self.comment_toggle = tk.IntVar()
-        self.comment_check = tk.Checkbutton(self.button_frame, text="Remove Comments", variable=self.comment_toggle)
+        self.comment_check = ttk.Checkbutton(self.button_frame, text="Remove Comments", variable=self.comment_toggle, style='TCheckbutton')
         self.comment_check.pack(side=tk.RIGHT)
 
-    def browse_directory(self):
-        directory = filedialog.askdirectory()
-        if directory:
-            self.project_directory = directory
-            self.gitignore_matches = self.parse_gitignore()
-            self.load_files(directory)
-            self.save_options()
 
-    def load_files(self, directory):
-        for widget in self.scrollable_file_frame.winfo_children():
-            if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "File":
-                widget.destroy()
-
-        self.file_frames.clear()  # Clear the file_frames dictionary
-
-        gitignore_matches = self.parse_gitignore()
-
-        for root, _, files in os.walk(directory):
-            for file in files:
-                if file.endswith(".py"):
-                    file_path = os.path.join(root, file)
-                    relative_path = os.path.relpath(file_path, directory)
-                    if gitignore_matches and gitignore_matches(relative_path):
-                        continue  # Skip this file if it matches .gitignore patterns
-                    self.add_file_widget(file_path)
 
     def add_file_widget(self, file_path):
-        file_frame = tk.Frame(self.scrollable_file_frame, bg="white")
+        file_frame = tk.Frame(self.scrollable_file_frame, bg=DARK_BG)
         file_frame.pack(fill=tk.X, padx=5, pady=2)
 
-        file_label = tk.Label(file_frame, text=os.path.basename(file_path), width=30, anchor="w", bg="white")
+        file_label = tk.Label(file_frame, text=os.path.basename(file_path), width=30, anchor="w", bg=DARK_BG, fg=DARK_FG)
         file_label.pack(side=tk.LEFT)
 
         if file_path not in self.file_strategies:
             self.file_strategies[file_path] = tk.StringVar(value="Include Full File")
         file_strategy = self.file_strategies[file_path]
 
-        file_dropdown = ttk.Combobox(file_frame, textvariable=file_strategy, width=40)
+        file_dropdown = ttk.Combobox(file_frame, textvariable=file_strategy, width=40, style='TCombobox')
         file_dropdown['values'] = (
             "Include Full File", "Exclude File", "Include Function Names and Return Values", "Include Docstrings Only")
         file_dropdown.pack(side=tk.LEFT)
@@ -196,6 +209,64 @@ class CodePreparationTool:
         file_frame.bind("<Button-1>", lambda e, fp=file_path: self.load_functions(fp))
 
         self.file_frames[file_path] = file_frame
+
+    def add_function_widget(self, file_path, func_name):
+        func_frame = tk.Frame(self.scrollable_function_frame, bg=DARK_BG)
+        func_frame.pack(fill=tk.X, padx=5, pady=2)
+
+        func_label = tk.Label(func_frame, text=func_name, width=30, anchor="w", bg=DARK_BG, fg=DARK_FG)
+        func_label.pack(side=tk.LEFT)
+
+        if (file_path, func_name) not in self.function_strategies:
+            self.function_strategies[(file_path, func_name)] = tk.StringVar(value="Include Full Function")
+        func_strategy = self.function_strategies[(file_path, func_name)]
+
+        func_dropdown = ttk.Combobox(func_frame, textvariable=func_strategy, width=30, style='TCombobox')
+        func_dropdown['values'] = (
+        "Include Full Function", "Exclude Function", "Include Signature Only", "Include Return Values Only",
+        "Include Docstrings Only")
+        func_dropdown.pack(side=tk.LEFT)
+
+    def load_functions(self, file_path):
+        # Define colors
+        SELECTED_COLOR = DARK_HIGHLIGHT
+        UNSELECTED_COLOR = DARK_BG
+        SELECTED_TEXT_COLOR = DARK_FG
+        UNSELECTED_TEXT_COLOR = DARK_FG
+
+        # Update file frames
+        for selected_file, file_frame in self.file_frames.items():
+            if selected_file == file_path:
+                file_frame.configure(bg=SELECTED_COLOR)
+                for widget in file_frame.winfo_children():
+                    if isinstance(widget, tk.Label):
+                        widget.configure(bg=SELECTED_COLOR, fg=SELECTED_TEXT_COLOR)
+            else:
+                file_frame.configure(bg=UNSELECTED_COLOR)
+                for widget in file_frame.winfo_children():
+                    if isinstance(widget, tk.Label):
+                        widget.configure(bg=UNSELECTED_COLOR, fg=UNSELECTED_TEXT_COLOR)
+
+        self.selected_file = file_path
+
+        # Clear existing function widgets
+        for widget in self.scrollable_function_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "Function":
+                widget.destroy()
+
+        # Load functions from the selected file
+        with open(file_path, "r") as file:
+            code = file.read()
+            tree = ast.parse(code)
+            functions = [node for node in ast.iter_child_nodes(tree) if
+                         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+
+            for func in functions:
+                self.add_function_widget(file_path, func.name)
+
+        # Ensure the selected file is visible
+        self.file_canvas.update_idletasks()
+        self.file_canvas.yview_moveto(self.file_frames[file_path].winfo_y() / self.scrollable_file_frame.winfo_height())
 
     def update_function_options(self, file_path):
         file_option = self.file_strategies[file_path].get()
@@ -213,25 +284,6 @@ class CodePreparationTool:
         # Refresh the function panel if it's currently showing this file
         if self.selected_file == file_path:
             self.load_functions(file_path)
-
-    def add_function_widget(self, file_path, func_name):
-        func_frame = tk.Frame(self.scrollable_function_frame)
-        func_frame.pack(fill=tk.X, padx=5, pady=2)
-
-        func_label = tk.Label(func_frame, text=func_name, width=30, anchor="w")
-        func_label.pack(side=tk.LEFT)
-
-        if (file_path, func_name) not in self.function_strategies:
-            self.function_strategies[(file_path, func_name)] = tk.StringVar(value="Include Full Function")
-        func_strategy = self.function_strategies[(file_path, func_name)]
-
-        func_dropdown = ttk.Combobox(func_frame, textvariable=func_strategy, width=30)
-        func_dropdown['values'] = (
-        "Include Full Function", "Exclude Function", "Include Signature Only", "Include Return Values Only",
-        "Include Docstrings Only")
-        func_dropdown.pack(side=tk.LEFT)
-
-
 
     def process_all_files(self):
         self.aggregated_code = ""
@@ -292,46 +344,32 @@ class CodePreparationTool:
             else:
                 self.aggregated_code += f"{func_sig}\n    pass\n\n"
 
-    def load_functions(self, file_path):
-        # Define colors
-        SELECTED_COLOR = "lightblue"
-        UNSELECTED_COLOR = "white"
-        SELECTED_TEXT_COLOR = "black"
-        UNSELECTED_TEXT_COLOR = "black"
 
-        # Update file frames
-        for selected_file, file_frame in self.file_frames.items():
-            if selected_file == file_path:
-                file_frame.configure(bg=SELECTED_COLOR)
-                for widget in file_frame.winfo_children():
-                    if isinstance(widget, tk.Label):
-                        widget.configure(bg=SELECTED_COLOR, fg=SELECTED_TEXT_COLOR)
-            else:
-                file_frame.configure(bg=UNSELECTED_COLOR)
-                for widget in file_frame.winfo_children():
-                    if isinstance(widget, tk.Label):
-                        widget.configure(bg=UNSELECTED_COLOR, fg=UNSELECTED_TEXT_COLOR)
+    def browse_directory(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.project_directory = directory
+            self.gitignore_matches = self.parse_gitignore()
+            self.load_files(directory)
+            self.save_options()
 
-        self.selected_file = file_path
-
-        # Clear existing function widgets
-        for widget in self.scrollable_function_frame.winfo_children():
-            if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "Function":
+    def load_files(self, directory):
+        for widget in self.scrollable_file_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "File":
                 widget.destroy()
 
-        # Load functions from the selected file
-        with open(file_path, "r") as file:
-            code = file.read()
-            tree = ast.parse(code)
-            functions = [node for node in ast.iter_child_nodes(tree) if
-                         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        self.file_frames.clear()  # Clear the file_frames dictionary
 
-            for func in functions:
-                self.add_function_widget(file_path, func.name)
+        gitignore_matches = self.parse_gitignore()
 
-        # Ensure the selected file is visible
-        self.file_canvas.update_idletasks()
-        self.file_canvas.yview_moveto(self.file_frames[file_path].winfo_y() / self.scrollable_file_frame.winfo_height())
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if file.endswith(".py"):
+                    file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, directory)
+                    if gitignore_matches and gitignore_matches(relative_path):
+                        continue  # Skip this file if it matches .gitignore patterns
+                    self.add_file_widget(file_path)
 
     def remove_comments(self, code):
         lines = code.split("\n")
