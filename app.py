@@ -4,6 +4,9 @@ import os
 import ast
 import pyperclip
 import json
+from gitignore_parser import parse_gitignore
+
+
 
 class CodePreparationTool:
     def __init__(self, root):
@@ -19,6 +22,14 @@ class CodePreparationTool:
         self.create_widgets()
         self.aggregated_code = ""
         self.load_options()
+        self.gitignore_matches = None
+
+    def parse_gitignore(self):
+        gitignore_path = os.path.join(self.project_directory, '.gitignore')
+        if os.path.exists(gitignore_path):
+            with open(gitignore_path, 'r') as gitignore_file:
+                return parse_gitignore(gitignore_file)
+        return None
 
     def create_widgets(self):
         self.main_frame = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
@@ -141,6 +152,7 @@ class CodePreparationTool:
         directory = filedialog.askdirectory()
         if directory:
             self.project_directory = directory
+            self.gitignore_matches = self.parse_gitignore()
             self.load_files(directory)
             self.save_options()
 
@@ -151,10 +163,15 @@ class CodePreparationTool:
 
         self.file_frames.clear()  # Clear the file_frames dictionary
 
+        gitignore_matches = self.parse_gitignore()
+
         for root, _, files in os.walk(directory):
             for file in files:
                 if file.endswith(".py"):
                     file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, directory)
+                    if gitignore_matches and gitignore_matches(relative_path):
+                        continue  # Skip this file if it matches .gitignore patterns
                     self.add_file_widget(file_path)
 
     def add_file_widget(self, file_path):
@@ -276,25 +293,45 @@ class CodePreparationTool:
                 self.aggregated_code += f"{func_sig}\n    pass\n\n"
 
     def load_functions(self, file_path):
+        # Define colors
+        SELECTED_COLOR = "lightblue"
+        UNSELECTED_COLOR = "white"
+        SELECTED_TEXT_COLOR = "black"
+        UNSELECTED_TEXT_COLOR = "black"
+
+        # Update file frames
         for selected_file, file_frame in self.file_frames.items():
             if selected_file == file_path:
-                file_frame.configure(bg="lightblue")
+                file_frame.configure(bg=SELECTED_COLOR)
+                for widget in file_frame.winfo_children():
+                    if isinstance(widget, tk.Label):
+                        widget.configure(bg=SELECTED_COLOR, fg=SELECTED_TEXT_COLOR)
             else:
-                file_frame.configure(bg="white")
+                file_frame.configure(bg=UNSELECTED_COLOR)
+                for widget in file_frame.winfo_children():
+                    if isinstance(widget, tk.Label):
+                        widget.configure(bg=UNSELECTED_COLOR, fg=UNSELECTED_TEXT_COLOR)
 
         self.selected_file = file_path
 
+        # Clear existing function widgets
         for widget in self.scrollable_function_frame.winfo_children():
             if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "Function":
                 widget.destroy()
 
+        # Load functions from the selected file
         with open(file_path, "r") as file:
             code = file.read()
             tree = ast.parse(code)
-            functions = [node for node in ast.iter_child_nodes(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            functions = [node for node in ast.iter_child_nodes(tree) if
+                         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
             for func in functions:
                 self.add_function_widget(file_path, func.name)
+
+        # Ensure the selected file is visible
+        self.file_canvas.update_idletasks()
+        self.file_canvas.yview_moveto(self.file_frames[file_path].winfo_y() / self.scrollable_file_frame.winfo_height())
 
     def remove_comments(self, code):
         lines = code.split("\n")
