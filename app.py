@@ -103,12 +103,15 @@ class CodePreparationTool:
         tk.Label(header_frame, text="Strategy", width=15).pack(side=tk.LEFT)
 
     def create_output_panel(self):
-        self.output_text = tk.Text(self.output_frame, wrap=tk.WORD)
-        self.output_text.pack(fill=tk.BOTH, expand=True)
+        output_frame = tk.Frame(self.output_frame)
+        output_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Add scrollbar to the output panel
-        output_scrollbar = tk.Scrollbar(self.output_frame, orient="vertical", command=self.output_text.yview)
-        output_scrollbar.pack(side="right", fill="y")
+        self.output_text = tk.Text(output_frame, wrap=tk.WORD)
+        output_scrollbar = tk.Scrollbar(output_frame, orient="vertical", command=self.output_text.yview)
+
+        self.output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        output_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
         self.output_text.configure(yscrollcommand=output_scrollbar.set)
 
     def create_bottom_panel(self):
@@ -170,10 +173,29 @@ class CodePreparationTool:
             "Include Full File", "Exclude File", "Include Function Names and Return Values", "Include Docstrings Only")
         file_dropdown.pack(side=tk.LEFT)
 
+        file_dropdown.bind("<<ComboboxSelected>>", lambda e: self.update_function_options(file_path))
+
         file_label.bind("<Button-1>", lambda e, fp=file_path: self.load_functions(fp))
         file_frame.bind("<Button-1>", lambda e, fp=file_path: self.load_functions(fp))
 
-        self.file_frames[file_path] = file_frame  # Store the file frame reference
+        self.file_frames[file_path] = file_frame
+
+    def update_function_options(self, file_path):
+        file_option = self.file_strategies[file_path].get()
+        function_option = {
+            "Include Full File": "Include Full Function",
+            "Exclude File": "Exclude Function",
+            "Include Function Names and Return Values": "Include Signature Only",
+            "Include Docstrings Only": "Include Docstrings Only"
+        }.get(file_option, "Include Full Function")
+
+        for key in list(self.function_strategies.keys()):
+            if key[0] == file_path:
+                self.function_strategies[key].set(function_option)
+
+        # Refresh the function panel if it's currently showing this file
+        if self.selected_file == file_path:
+            self.load_functions(file_path)
 
     def add_function_widget(self, file_path, func_name):
         func_frame = tk.Frame(self.scrollable_function_frame)
@@ -192,24 +214,6 @@ class CodePreparationTool:
         "Include Docstrings Only")
         func_dropdown.pack(side=tk.LEFT)
 
-    def load_functions(self, file_path):
-        if self.selected_file:
-            self.selected_file.configure(bg="white")
-        self.selected_file = self.file_frames.get(file_path)
-        if self.selected_file:
-            self.selected_file.configure(bg="lightblue")
-
-        for widget in self.scrollable_function_frame.winfo_children():
-            if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "Function":
-                widget.destroy()
-
-        with open(file_path, "r") as file:
-            code = file.read()
-            tree = ast.parse(code)
-            functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
-
-            for func in functions:
-                self.add_function_widget(file_path, func.name)
 
 
     def process_all_files(self):
@@ -228,41 +232,69 @@ class CodePreparationTool:
             tree = ast.parse(code)
 
             file_option = self.file_strategies[file_path].get()
-            if file_option == "Include Full File":
-                self.aggregated_code += f"```python\n# File: {file_path}\n{code}\n```\n\n"
-            elif file_option == "Exclude File":
+            if file_option == "Exclude File":
                 return
-            elif file_option == "Include Function Names and Return Values":
-                self.aggregated_code += f"```python\n# File: {file_path}\n"
-                for func in [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]:
-                    self.aggregated_code += f"{func.name} -> {ast.get_source_segment(code, func).split('return')[-1].strip()}\n"
-                self.aggregated_code += "\n```\n\n"
-            elif file_option == "Include Docstrings Only":
-                self.aggregated_code += f"```python\n# File: {file_path}\n"
-                for func in [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]:
-                    docstring = ast.get_docstring(func)
-                    if docstring:
-                        self.aggregated_code += f"{func.name}:\n{docstring}\n"
-                self.aggregated_code += "\n```\n\n"
 
-            self.process_functions(file_path, tree, code)
+            self.aggregated_code += f"```python\n# File: {file_path}\n"
 
-    def process_functions(self, file_path, tree, code):
-        for func in [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]:
-            function_option = self.function_strategies.get((file_path, func.name), tk.StringVar()).get()
-            if function_option == "Include Full Function":
-                self.aggregated_code += f"```python\n# File: {file_path}\n# Function: {func.name}\n{ast.get_source_segment(code, func)}\n```\n\n"
-            elif function_option == "Exclude Function":
-                continue
-            elif function_option == "Include Signature Only":
-                self.aggregated_code += f"```python\n# File: {file_path}\n# Function: {func.name}\n{func.name}{ast.get_source_segment(code, func).split(':')[0]}:\n```\n\n"
-            elif function_option == "Include Return Values Only":
-                return_value = ast.get_source_segment(code, func).split('return')[-1].strip()
-                self.aggregated_code += f"```python\n# File: {file_path}\n# Function: {func.name}\nreturn {return_value}\n```\n\n"
-            elif function_option == "Include Docstrings Only":
-                docstring = ast.get_docstring(func)
-                if docstring:
-                    self.aggregated_code += f"```python\n# File: {file_path}\n# Function: {func.name}\n{docstring}\n```\n\n"
+            if file_option == "Include Full File":
+                self.aggregated_code += code + "\n"
+            else:
+                self.process_non_function_code(tree, code)
+                for node in ast.iter_child_nodes(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        function_option = self.function_strategies.get((file_path, node.name), tk.StringVar()).get()
+                        self.process_function(file_path, node, code, function_option)
+
+            self.aggregated_code += "```\n\n"
+
+    def process_non_function_code(self, tree, code):
+        for node in ast.iter_child_nodes(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                self.aggregated_code += ast.get_source_segment(code, node) + "\n"
+        self.aggregated_code += "\n"
+
+    def process_function(self, file_path, func, code, function_option):
+        if function_option == "Exclude Function":
+            return
+
+        func_sig = f"{'async ' if isinstance(func, ast.AsyncFunctionDef) else ''}def {func.name}({ast.unparse(func.args)}):"
+        docstring = ast.get_docstring(func)
+
+        if function_option == "Include Full Function":
+            self.aggregated_code += f"{ast.get_source_segment(code, func)}\n\n"
+        elif function_option == "Include Signature Only":
+            self.aggregated_code += f"{func_sig}\n    pass\n\n"
+        elif function_option == "Include Return Values Only":
+            return_stmt = next((ast.unparse(node.value) for node in ast.walk(func) if isinstance(node, ast.Return)),
+                               None)
+            self.aggregated_code += f"{func_sig}\n    return {return_stmt if return_stmt else 'None'}\n\n"
+        elif function_option == "Include Docstrings Only":
+            if docstring:
+                self.aggregated_code += f"{func_sig}\n    \"\"\"\n    {docstring}\n    \"\"\"\n    pass\n\n"
+            else:
+                self.aggregated_code += f"{func_sig}\n    pass\n\n"
+
+    def load_functions(self, file_path):
+        for selected_file, file_frame in self.file_frames.items():
+            if selected_file == file_path:
+                file_frame.configure(bg="lightblue")
+            else:
+                file_frame.configure(bg="white")
+
+        self.selected_file = file_path
+
+        for widget in self.scrollable_function_frame.winfo_children():
+            if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "Function":
+                widget.destroy()
+
+        with open(file_path, "r") as file:
+            code = file.read()
+            tree = ast.parse(code)
+            functions = [node for node in ast.iter_child_nodes(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+
+            for func in functions:
+                self.add_function_widget(file_path, func.name)
 
     def remove_comments(self, code):
         lines = code.split("\n")
