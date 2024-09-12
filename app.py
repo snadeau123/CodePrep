@@ -223,8 +223,8 @@ class CodePreparationTool:
 
         func_dropdown = ttk.Combobox(func_frame, textvariable=func_strategy, width=30, style='TCombobox')
         func_dropdown['values'] = (
-        "Include Full Function", "Exclude Function", "Include Signature Only", "Include Return Values Only",
-        "Include Docstrings Only")
+            "Include Full Function", "Exclude Function", "Include Signature Only", "Include Return Values Only",
+            "Include Docstrings Only")
         func_dropdown.pack(side=tk.LEFT)
 
     def load_functions(self, file_path):
@@ -254,15 +254,18 @@ class CodePreparationTool:
             if isinstance(widget, tk.Frame) and widget.winfo_children()[0].cget("text") != "Function":
                 widget.destroy()
 
-        # Load functions from the selected file
+        # Load functions and methods from the selected file
         with open(file_path, "r") as file:
             code = file.read()
             tree = ast.parse(code)
-            functions = [node for node in ast.iter_child_nodes(tree) if
-                         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
-            for func in functions:
-                self.add_function_widget(file_path, func.name)
+            for node in ast.iter_child_nodes(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    self.add_function_widget(file_path, node.name)
+                elif isinstance(node, ast.ClassDef):
+                    for class_node in ast.iter_child_nodes(node):
+                        if isinstance(class_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                            self.add_function_widget(file_path, f"{node.name}.{class_node.name}")
 
         # Ensure the selected file is visible
         self.file_canvas.update_idletasks()
@@ -312,38 +315,60 @@ class CodePreparationTool:
                 self.process_non_function_code(tree, code)
                 for node in ast.iter_child_nodes(tree):
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        function_option = self.function_strategies.get((file_path, node.name), tk.StringVar()).get()
-                        self.process_function(file_path, node, code, function_option)
+                        self.process_function(file_path, node, code)
+                    elif isinstance(node, ast.ClassDef):
+                        self.process_class(file_path, node, code)
 
             self.aggregated_code += "```\n\n"
 
-    def process_non_function_code(self, tree, code):
-        for node in ast.iter_child_nodes(tree):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                self.aggregated_code += ast.get_source_segment(code, node) + "\n"
-        self.aggregated_code += "\n"
+    def process_class(self, file_path, class_node, code):
+        class_option = self.file_strategies[file_path].get()
+        if class_option == "Exclude File":
+            return
 
-    def process_function(self, file_path, func, code, function_option):
+        class_sig = f"class {class_node.name}({', '.join(ast.unparse(base) for base in class_node.bases)}):"
+
+        if class_option == "Include Full File":
+            self.aggregated_code += f"{ast.get_source_segment(code, class_node)}\n\n"
+        elif class_option in ["Include Function Names and Return Values", "Include Docstrings Only"]:
+            self.aggregated_code += f"{class_sig}\n"
+            for node in ast.iter_child_nodes(class_node):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    self.process_function(file_path, node, code, class_name=class_node.name)
+            self.aggregated_code += "\n"
+
+    def process_function(self, file_path, func, code, class_name=None):
+        function_key = f"{class_name}.{func.name}" if class_name else func.name
+        function_option = self.function_strategies.get((file_path, function_key), tk.StringVar()).get()
+
         if function_option == "Exclude Function":
             return
 
         func_sig = f"{'async ' if isinstance(func, ast.AsyncFunctionDef) else ''}def {func.name}({ast.unparse(func.args)}):"
         docstring = ast.get_docstring(func)
 
+        if class_name:
+            func_sig = f"    {func_sig}"
+
         if function_option == "Include Full Function":
             self.aggregated_code += f"{ast.get_source_segment(code, func)}\n\n"
         elif function_option == "Include Signature Only":
-            self.aggregated_code += f"{func_sig}\n    pass\n\n"
+            self.aggregated_code += f"{func_sig}\n{'    ' if class_name else ''}    pass\n\n"
         elif function_option == "Include Return Values Only":
             return_stmt = next((ast.unparse(node.value) for node in ast.walk(func) if isinstance(node, ast.Return)),
                                None)
-            self.aggregated_code += f"{func_sig}\n    return {return_stmt if return_stmt else 'None'}\n\n"
+            self.aggregated_code += f"{func_sig}\n{'    ' if class_name else ''}    return {return_stmt if return_stmt else 'None'}\n\n"
         elif function_option == "Include Docstrings Only":
             if docstring:
-                self.aggregated_code += f"{func_sig}\n    \"\"\"\n    {docstring}\n    \"\"\"\n    pass\n\n"
+                self.aggregated_code += f"{func_sig}\n{'    ' if class_name else ''}    \"\"\"\n{'    ' if class_name else ''}    {docstring}\n{'    ' if class_name else ''}    \"\"\"\n{'    ' if class_name else ''}    pass\n\n"
             else:
-                self.aggregated_code += f"{func_sig}\n    pass\n\n"
+                self.aggregated_code += f"{func_sig}\n{'    ' if class_name else ''}    pass\n\n"
 
+    def process_non_function_code(self, tree, code):
+        for node in ast.iter_child_nodes(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                self.aggregated_code += ast.get_source_segment(code, node) + "\n"
+        self.aggregated_code += "\n"
 
     def browse_directory(self):
         directory = filedialog.askdirectory()
